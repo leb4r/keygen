@@ -1,0 +1,122 @@
+# cardano
+# much of this is outlined in https://cardano-foundation.gitbook.io/stake-pool-course/
+# use container build from iohk to provide access to CLI
+# output can be found in ./artifacts directory
+#
+CARDANO_VERSION ?= 1.28.0
+CARDANO_CLI = docker run -it --entrypoint="" \
+	-w /artifacts --volume $(ARTIFACTS_DIR):/artifacts:z \
+	docker.io/inputoutput/cardano-node:$(CARDANO_VERSION) \
+	cardano-cli
+CARDANO_CLI_MAGIC ?= --testnet-magic 1097911063
+
+METADATA_POOL_NAME ?= TestPool
+METADATA_POOL_DESCRIPTION ?= The pool that tests all the pools.
+METADATA_POOL_TICKER ?= TEST
+METADATA_POOL_HOMEPAGE ?= https://teststakepool.com
+METADATA_JSON_FILE ?= metadata.json
+
+# see https://stackoverflow.com/questions/649246/is-it-possible-to-create-a-multi-line-string-variable-in-a-makefile
+define METADATA_JSON
+{
+	"name": "$(METADATA_POOL_NAME)",
+	"description": "$(METADATA_POOL_DESCRIPTION)",
+	"ticker": "$(METADATA_POOL_TICKER)",
+	"homepage": "$(METADATA_POOL_HOMEPAGE)"
+}
+endef
+export METADATA_JSON
+
+POOL_PLEDGE ?= 70000000000
+POOL_COST ?= 4321000000
+POOL_MARGIN ?= 0.04
+POOL_METADATA_URL ?= https://git.io/JJWdJ
+POOL_REGISTRATION_CERT_FILE = pool-registration.cert
+POOL_RELAY_IPV4 ?= 127.0.0.1
+POOL_RELAY_PORT ?= 3000
+
+PAYMENT_VERIFICATION_KEY_FILE ?= payment.vkey
+PAYMENT_SIGNING_KEY_FILE ?= payment.skey
+
+STAKING_VERIFICATION_KEY_FILE ?= stake.vkey
+STAKING_SIGNING_KEY_FILE ?= stake.skey
+STAKING_ADDRESS_FILE ?= stake.addr
+STAKING_REGISTRATION_CERTIFICATE ?= stake.cert
+
+COLD_VERIFICATION_KEY_FILE ?= cold.vkey
+COLD_SIGNING_KEY_FILE ?= cold.skey
+COLD_OPERATIONAL_CERTIFICATION_ISSUE_COUNTER_FILE ?= cold.counter
+
+VRF_VERIFICATION_KEY_FILE ?= vrf.vkey
+VRF_SIGNING_KEY_FILE ?= vrf.skey
+
+KES_VERIFICATION_KEY_FILE ?= kes.vkey
+KES_SIGNING_KEY_FILE ?= kes.skey
+KES_CERT_FILE ?= node.cert
+
+## Generate an address that can send and receive payments
+cardano/addr:
+	$(CARDANO_CLI) address key-gen \
+		--verification-key-file $(PAYMENT_VERIFICATION_KEY_FILE) \
+		--signing-key-file $(PAYMENT_SIGNING_KEY_FILE)
+
+## Generate a cold key pair and counter
+cardano/cold:
+	$(CARDANO_CLI) node key-gen \
+		--cold-verification-key-file $(COLD_VERIFICATION_KEY_FILE) \
+		--cold-signing-key-file $(COLD_SIGNING_KEY_FILE) \
+		--operational-certificate-issue-counter-file $(COLD_OPERATIONAL_CERTIFICATION_ISSUE_COUNTER_FILE)
+
+## Generate a VRF key pair
+cardano/vrf:
+	$(CARDANO_CLI) node key-gen-VRF \
+		--verification-key-file $(VRF_VERIFICATION_KEY_FILE) \
+		--signing-key-file $(VRF_SIGNING_KEY_FILE)
+
+## Generate a KES key pair
+cardano/kes:
+	$(CARDANO_CLI) node key-gen-KES \
+		--verification-key-file $(KES_VERIFICATION_KEY_FILE) \
+		--signing-key-file $(KES_SIGNING_KEY_FILE)
+
+## Generate operating certificate
+cardano/kes/cert: cardano/cold cardano/kes
+	$(CARDANO_CLI) node issue-op-cert \
+		--key-verficiation-key-file $(KES_VERIFICATION_KEY_FILE) \
+		--cold-signing-key-file $(COLD_SIGNING_KEY_FILE) \
+		--operational-certificate-issue-counter $(COLD_OPERATIONAL_CERTIFICATION_ISSUE_COUNTER_FILE) \
+		--key-period $() \
+		--out-file $(KES_CERT_FILE)
+
+## Generate a staking address, which requires a key pair
+cardano/staking/addr:
+	$(CARDANO_CLI) stake-address key-gen \
+		--verification-key-file $(STAKING_VERIFICATION_KEY_FILE) \
+		--signing-key-file $(STAKING_SIGNING_KEY_FILE)
+
+	$(CARDANO_CLI) stake-address build \
+		--stake-verification-key-file $(STAKING_VERIFICATION_KEY_FILE) \
+		--out-file $(STAKING_ADDRESS_FILE) \
+		$(CARDANO_CLI_MAGIC)
+
+## Generate staking pool metadata JSON
+cardano/staking/metadata:
+	echo "$$METADATA_JSON" > artifacts/$(METADATA_JSON_FILE)
+	$(CARDANO_CLI) stake-pool metadata-hash --pool-metadata-file $(METADATA_JSON_FILE) > artifacts/metadata.json.hash
+
+## Generate a staking pool registration certificate
+cardano/pool/cert: cardano/staking/addr cardano/staking/metadata cardano/addr cardano/cold cardano/vrf cardano/kes
+	$(CARDANO_CLI) stake-pool registration-certificate \
+		--cold-verification-key-file $(COLD_VERIFICATION_KEY_FILE) \
+		--vrf-verification-key-file $(VRF_VERIFICATION_KEY_FILE) \
+		--pool-pledge $(POOL_PLEDGE) \
+		--pool-cost $(POOL_COST) \
+		--pool-margin $(POOL_MARGIN) \
+		--pool-reward-account-verification-key-file $(STAKING_VERIFICATION_KEY_FILE) \
+		--pool-owner-stake-verification-key-file $(STAKING_VERIFICATION_KEY_FILE) \
+		--pool-relay-ipv4 $(POOL_RELAY_IPV4) \
+		--pool-relay-port $(POOL_RELAY_PORT) \
+		--metadata-url $(POOL_METADATA_URL) \
+		--metadata-hash $(shell cat artifacts/metadata.json.hash) \
+		--out-file $(POOL_REGISTRATION_CERT_FILE) \
+		$(CARDANO_CLI_MAGIC)
