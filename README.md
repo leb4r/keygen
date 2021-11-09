@@ -1,15 +1,17 @@
 # Keygen
 
-Generate keys, addresses, and certificates on various networks.
+Generate keys, addresses, and certificates on blockchain networks.
 
-## Requirements
+## Usage
+
+### Software Requirements
 
 This project requires the following to be present for execution:
 
 - Docker
 - Make
 
-## Usage
+### Make Targets
 
 Execution is facilitated via `make`. Execute the `help` target to get a list of options.
 
@@ -42,3 +44,5 @@ make cardano/addr
 ```
 
 #### Cardano Staking Pool
+
+TBD
