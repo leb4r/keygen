@@ -1,5 +1,4 @@
-SELF_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
-ARTIFACTS_DIR := $(SELF_DIR)/artifacts
+ARTIFACTS_DIR := $(CURDIR)/artifacts
 SHELL := /bin/bash
 
 DEFAULT_HELP_TARGET ?= help/short
