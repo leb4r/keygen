@@ -20,7 +20,7 @@ METADATA_POOL_NAME ?= TestPool
 METADATA_POOL_DESCRIPTION ?= The pool that tests all the pools.
 METADATA_POOL_TICKER ?= TEST
 METADATA_POOL_HOMEPAGE ?= https://teststakepool.com
-METADATA_JSON_FILE ?= metadata.json
+METADATA_JSON_FILE ?= $(ARTIFACTS_DIR)/metadata.json
 
 # see https://stackoverflow.com/questions/649246/is-it-possible-to-create-a-multi-line-string-variable-in-a-makefile
 define METADATA_JSON
@@ -108,7 +108,7 @@ cardano/staking/addr:
 ## Generate staking pool metadata JSON
 cardano/staking/metadata:
 	echo "$$METADATA_JSON" > artifacts/$(METADATA_JSON_FILE)
-	$(CARDANO_CLI) stake-pool metadata-hash --pool-metadata-file $(METADATA_JSON_FILE) > artifacts/metadata.json.hash
+	$(CARDANO_CLI) stake-pool metadata-hash --pool-metadata-file $(METADATA_JSON_FILE) > $(ARTIFACTS_DIR)/metadata.json.hash
 
 ## Generate a staking pool registration certificate
 cardano/pool/cert: cardano/staking/addr cardano/staking/metadata cardano/addr cardano/cold cardano/vrf cardano/kes
@@ -123,6 +123,6 @@ cardano/pool/cert: cardano/staking/addr cardano/staking/metadata cardano/addr ca
 		--pool-relay-ipv4 $(POOL_RELAY_IPV4) \
 		--pool-relay-port $(POOL_RELAY_PORT) \
 		--metadata-url $(POOL_METADATA_URL) \
-		--metadata-hash $(shell cat artifacts/metadata.json.hash) \
+		--metadata-hash $(shell cat $(ARTIFACTS_DIR)/metadata.json.hash) \
 		--out-file $(POOL_REGISTRATION_CERT_FILE) \
 		$(CARDANO_CLI_MAGIC)
